@@ -28,7 +28,7 @@ function testcase.writev()
     n, err, again, remain = writev(w:fd(), 'hello', ' writev ', 'world')
     assert.is_nil(err)
     assert.is_true(again)
-    assert.is_nil(remain)
+    assert.equal(remain, 'hello writev world')
     assert.equal(n, 0)
 
     -- test that return nil if peer closed
