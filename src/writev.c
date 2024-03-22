@@ -66,7 +66,8 @@ RETRY:
             lua_pushinteger(L, 0);
             lua_pushnil(L);
             lua_pushboolean(L, 1);
-            return 3;
+            lua_pushvalue(L, 2);
+            return 4;
         } else if (errno == EPIPE) {
             // closed by peer
             return 0;
