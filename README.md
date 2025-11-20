@@ -19,9 +19,9 @@ luarocks install io-writev
 the following functions return the `error` object created by https://github.com/mah0x211/lua-errno module.
 
 
-## n, err, again, remain = writev( file, ... )
+## n, err, again, remain = writev( file, data )
 
-open the lua file handle from a pathname or descriptor of the file.
+writes multiple strings to a file handle or file descriptor using the `writev` system call for efficient vectorized I/O.
 
 **NOTE**
 
@@ -31,14 +31,16 @@ if the non-blocking flag is not set in `file`, then writev function will block u
 **Parameters**
 
 - `file:file*|integer`: a file handle or a file descriptor.
-- `...:string`: strings to be written to the file, one or more are required.
+- `data:table`: a table containing strings to be written to the file. `nil` entries are treated as empty strings.
 
 **Returns**
 
 - `n:integer`: number of bytes written.
 - `err:any`: error object.
 - `again:boolean`: `true` if the write operation is incomplete with `EAGAIN`, `EWOULDBLOCK` or `EINTR` error.
-- `remain:string`: the remaining data that could not be written. if `again` is `true`, then the `remain` is a string that contains the remaining data that could not be written.
+- `remain:table`: when `again` is `true`, contains the unwritten data:
+  - If no bytes were written (`EAGAIN`/`EWOULDBLOCK`/`EINTR` immediately), returns the original `data` table.
+  - If partial write occurred, returns a new table containing only the remaining data. The original `data` table is not modified.
 
 
 ## Usage
@@ -46,11 +48,16 @@ if the non-blocking flag is not set in `file`, then writev function will block u
 ```lua
 local dump = require('dump')
 local writev = require('io.writev')
+local f = assert(io.tmpfile())
 
 -- write strings to a file
-local f = assert(io.tmpfile())
-local n, err, again, remain = writev(f, 'hello', ' writev ', nil, 'world') -- nil is treated as an empty string
-
+-- nil is treated as an empty string
+local n, err, again, remain = writev(f, {'hello', ' writev ', nil, 'world'}) 
+while again do
+    -- wait until writable with select/poll/epoll...
+    -- write remaining data
+    n, err, again, remain = writev(f, {'hello', ' writev ', nil, 'world'}) 
+end
 f:seek('set')
 print(dump({
     n = n,
