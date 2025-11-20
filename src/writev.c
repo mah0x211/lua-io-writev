@@ -19,6 +19,7 @@
  *  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  *  IN THE SOFTWARE.
  */
+#include <sys/uio.h>
 #include <unistd.h>
 // lua
 #include <lauxhlib.h>
@@ -26,11 +27,11 @@
 
 static int writev_lua(lua_State *L)
 {
-    int narg        = lua_gettop(L);
-    int fd          = -1;
-    size_t len      = 0;
-    const char *str = NULL;
-    ssize_t n       = 0;
+    int fd            = -1;
+    struct iovec *iov = NULL;
+    int iovcnt        = 0;
+    size_t total_len  = 0;
+    ssize_t nwritten  = 0;
 
     // check fd
     if (lauxh_isint(L, 1)) {
@@ -38,28 +39,39 @@ static int writev_lua(lua_State *L)
     } else {
         fd = lauxh_fileno(L, 1);
     }
+    // check iovec table
+    luaL_checktype(L, 2, LUA_TTABLE);
+    lua_settop(L, 2);
 
-    // check strings
-    if (narg < 2) {
-        return lauxh_argerror(L, 2, "string expected, got no value");
-    }
-    for (int i = 2; i <= narg; i++) {
-        if (lua_isnoneornil(L, i)) {
-            lua_pushliteral(L, "");
-            lua_replace(L, i);
-        } else if (lua_type(L, i) != LUA_TSTRING) {
-            return lauxh_argerror(L, i, "string expected, got %s",
-                                  luaL_typename(L, i));
+    // build iovec array
+    iovcnt = lauxh_rawlen(L, 2);
+    iov    = (struct iovec *)lua_newuserdata(L, sizeof(struct iovec) * iovcnt);
+    for (int i = 0; i < iovcnt; i++) {
+        lua_rawgeti(L, 2, i + 1);
+        if (lua_isnoneornil(L, -1)) {
+            // set empty string
+            iov[i].iov_base = "";
+            iov[i].iov_len  = 0;
+        } else if (lua_type(L, -1) != LUA_TSTRING) {
+            return lauxh_argerror(L, 2, "table#%d: string expected, got %s",
+                                  i + 1, luaL_typename(L, -1));
+        } else {
+            iov[i].iov_base = (void *)lua_tolstring(L, -1, &iov[i].iov_len);
         }
+        total_len += iov[i].iov_len;
+        lua_pop(L, 1);
     }
-    // merge specified strings
-    lua_concat(L, narg - 1);
-    str = lua_tolstring(L, 2, &len);
 
-    n = write(fd, str, len);
-    if (n == -1) {
+    if (iovcnt == 0) {
+        // no data to write
+        lua_pushinteger(L, 0);
+        return 1;
+    }
+
+    nwritten = writev(fd, iov, iovcnt);
+    if (nwritten == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-            // again
+            // again - need to merge remaining data
             lua_pushinteger(L, 0);
             lua_pushnil(L);
             lua_pushboolean(L, 1);
@@ -70,18 +82,40 @@ static int writev_lua(lua_State *L)
             return 0;
         }
         lua_pushnil(L);
-        lua_errno_new(L, errno, "write");
+        lua_errno_new(L, errno, "writev");
         return 2;
     }
 
-    lua_pushinteger(L, n);
-    len -= (size_t)n;
-    if (!len) {
+    // all data written
+    if ((size_t)nwritten == total_len) {
+        lua_pushinteger(L, nwritten);
         return 1;
     }
+
+    // partial write - remove written data from table
+    lua_pushinteger(L, nwritten);
     lua_pushnil(L);
     lua_pushboolean(L, 1);
-    lua_pushlstring(L, str + n, len);
+    lua_createtable(L, iovcnt, 0); // new table for remaining iovecs
+    for (int i = 0; i < iovcnt; i++) {
+        if (iov[i].iov_len <= (size_t)nwritten) {
+            // skip this iovec
+            nwritten -= iov[i].iov_len;
+            continue;
+        }
+
+        // push remaining data
+        lua_pushlstring(L, (const char *)iov[i].iov_base + nwritten,
+                        iov[i].iov_len - nwritten);
+        lua_rawseti(L, -2, 1);
+        // copy remaining iovecs
+        i++;
+        for (int j = 2; i < iovcnt; i++, j++) {
+            lua_rawgeti(L, 2, i + 1);
+            lua_rawseti(L, -2, j);
+        }
+    }
+
     return 4;
 }
 
