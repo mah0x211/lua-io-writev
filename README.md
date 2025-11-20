@@ -56,7 +56,7 @@ local n, err, again, remain = writev(f, {'hello', ' writev ', nil, 'world'})
 while again do
     -- wait until writable with select/poll/epoll...
     -- write remaining data
-    n, err, again, remain = writev(f, {'hello', ' writev ', nil, 'world'}) 
+    n, err, again, remain = writev(f, remain) 
 end
 f:seek('set')
 print(dump({
