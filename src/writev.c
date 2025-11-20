@@ -56,12 +56,9 @@ static int writev_lua(lua_State *L)
     lua_concat(L, narg - 1);
     str = lua_tolstring(L, 2, &len);
 
-RETRY:
     n = write(fd, str, len);
     if (n == -1) {
-        if (errno == EINTR) {
-            goto RETRY;
-        } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
             // again
             lua_pushinteger(L, 0);
             lua_pushnil(L);

@@ -37,7 +37,7 @@ if the non-blocking flag is not set in `file`, then writev function will block u
 
 - `n:integer`: number of bytes written.
 - `err:any`: error object.
-- `again:boolean`: `true` if the write operation is incomplete with `EAGAIN` or `EWOULDBLOCK` error.
+- `again:boolean`: `true` if the write operation is incomplete with `EAGAIN`, `EWOULDBLOCK` or `EINTR` error.
 - `remain:string`: the remaining data that could not be written. if `again` is `true`, then the `remain` is a string that contains the remaining data that could not be written.
 
 
