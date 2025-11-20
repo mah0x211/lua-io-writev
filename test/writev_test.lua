@@ -16,7 +16,7 @@ function testcase.writev()
 
     -- test that write specified strings to a file
     local n, again, remain
-    n, err, again, remain = writev(w:fd(), 'hello', nil, ' writev ', 'world')
+    n, err, again, remain = writev(w:fd(), {'hello', nil, ' writev ', 'world'})
     assert.is_nil(err)
     assert.is_nil(again)
     assert.is_nil(remain)
@@ -25,22 +25,22 @@ function testcase.writev()
 
     -- test that return again=true even if a little extra capacity is available.
     assert(w:write(string.rep('a', cap - 11)))
-    n, err, again, remain = writev(w:fd(), 'hello', ' writev ', 'world')
+    n, err, again, remain = writev(w:fd(), {'hello', ' writev ', 'world'})
     assert.is_nil(err)
     assert.is_true(again)
-    assert.equal(remain, 'hello writev world')
+    assert.equal(remain, {'hello', ' writev ', 'world'})
     assert.equal(n, 0)
 
     -- test that return nil if peer closed
     r:close()
-    n, err, again, remain = writev(w:fd(), 'hello', ' writev ', 'world')
+    n, err, again, remain = writev(w:fd(), {'hello', ' writev ', 'world'})
     assert.is_nil(err)
     assert.is_nil(again)
     assert.is_nil(n)
     assert.is_nil(remain)
 
     -- test that throws an error if invalid file descriptor
-    n, err, again, remain = writev(123456789, 'hello', ' writev ', 'world')
+    n, err, again, remain = writev(123456789, {'hello', ' writev ', 'world'})
     assert.match(err, 'EBADF')
     assert.is_nil(n)
     assert.is_nil(again)
@@ -48,18 +48,18 @@ function testcase.writev()
 
     -- test that throws an error if no string argument specified
     err = assert.throws(writev, w:fd())
-    assert.match(err, '#2 .+string expected, got no value', false)
+    assert.match(err, '#2 .+table expected, got no value', false)
 
     -- test that throws an error if invalid string argument
-    err = assert.throws(writev, w:fd(), 'hello', 123, 'world')
-    assert.match(err, '#3 .+string expected, got number', false)
+    err = assert.throws(writev, w:fd(), {'hello', 123, 'world'})
+    assert.match(err, 'table#2.+string expected, got number', false)
 end
 
 function testcase.writev_to_file()
     local f = assert(io.tmpfile())
 
     -- test that write to a file
-    local n, err, again = writev(f, 'hello', ' writev ', 'world')
+    local n, err, again = writev(f, {'hello', ' writev ', 'world'})
     assert.is_nil(err)
     assert.is_nil(again)
     assert.equal(n, 18)
